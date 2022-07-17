@@ -1,16 +1,20 @@
 package com.jiaruiblog.justforonce.utils;
 
+import com.sun.xml.internal.messaging.saaj.util.FinalArrayList;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.pattern.PathPattern;
 
 import java.io.*;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.util.*;
 
 /**
  * @ClassName CSVToObject
- * @Description TODO 返回内容自定义返回列表或者集合
+ * @Description TODO 返回内容自定义返回列表或者集合；自定义哪些是不能重复的。
+ * 也可以设置为是否转换为map？
  * @Author luojiarui
  * @Date 2022/7/17 1:49 下午
  * @Version 1.0
@@ -31,6 +35,10 @@ public class CSVToObject {
 
     private static final String INFO_MESSAGE = "导入了 {0} 条";
 
+    private Class<? extends Collection> collectionType = Set.class;
+
+    private Class<?> targetClass;
+
     /**
      * @Author luojiarui
      * @Description // 无餐构造函数，用户实例初始化
@@ -42,6 +50,58 @@ public class CSVToObject {
         this.generateFieldLengthMap();
     }
 
+
+    public CSVToObject bind(Class<?> targetClass) {
+        this.targetClass = targetClass;
+        // 初始化阶段必需对每个field的类型进行判断基本类型，通过classloader进行判断
+        this.config();
+        return this;
+    }
+
+    public <T> CSVToObject bind(Class<?> targetClass, Class<T> collectionType) {
+        System.out.println(collectionType.getName());
+        if( !Collection.class.isAssignableFrom(collectionType)) {
+            throw new RuntimeException("collection type is error!");
+        }
+        this.collectionType = (Class<? extends Collection>) collectionType;
+        return bind(targetClass);
+    }
+
+    /**
+     * @Author luojiarui
+     * @Description 对Field的信息进行获取
+     * @Date 7:27 下午 2022/7/17
+     * @Param []
+     * @return void
+     **/
+    private void config() {
+
+        // todo 这里应该用map进行快速检索。
+
+        List<String> rowNames = new ArrayList<>();
+        List<Boolean> isNecessarys = new ArrayList<>();
+        List<Integer> fieldLengths = new ArrayList<>();
+        List<String> fieldRegexs = new ArrayList<>();
+        List<Boolean> isRepeate = new ArrayList<>();
+
+        Field [] fields = targetClass.getDeclaredFields();
+        System.out.println(fields);
+        for(int x = 0 ; x < fields.length; x++) {
+            Transfer transfer = fields[x].getDeclaredAnnotation(Transfer.class);
+            if(transfer != null) {
+                if( !StringUtils.hasText(transfer.rowName())) {
+                    continue;
+                }
+                rowNames.add(transfer.rowName());
+                isNecessarys.add(transfer.isNecessary());
+                fieldLengths.add(transfer.fieldLength());
+                fieldRegexs.add(transfer.fieldRegex());
+                isRepeate.add(transfer.isRepeat());
+            }
+        }
+
+    }
+
     /**
      * @Author luojiarui
      * @Description //生成属性的长度限制
@@ -51,13 +111,23 @@ public class CSVToObject {
      **/
     private void generateFieldLengthMap() {
         for (int i = 0; i < NESSCESSRY_FIELD.length; i++) {
-            this.fieldMap.put(
+            fieldMap.put(
                     NESSCESSRY_FIELD[i], FIELD_LENGTH[i]
             );
         }
     }
 
-    public static void CSVImport(String filePath) {
+    public <T> List<T> CSVExport(String filePath) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+
+        List<Object> targets = new ArrayList<>();
+
+        Object target = targetClass.getDeclaredConstructor().newInstance();
+
+        targets.add(target);
+        if(target != null) {
+            return (List<T>) targets;
+        }
+
 
         // Step.1 参数检查
         // TODO
@@ -108,7 +178,7 @@ public class CSVToObject {
 
         // STEP.7 存库
 
-
+        return new ArrayList<>();
 
     }
 

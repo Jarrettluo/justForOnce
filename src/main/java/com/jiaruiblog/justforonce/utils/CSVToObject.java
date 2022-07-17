@@ -10,6 +10,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * @ClassName CSVToObject
@@ -124,7 +125,7 @@ public class CSVToObject {
         Object target = targetClass.getDeclaredConstructor().newInstance();
 
         targets.add(target);
-        if(target != null) {
+        if(target == null) {
             return (List<T>) targets;
         }
 
@@ -182,8 +183,28 @@ public class CSVToObject {
 
     }
 
-    public static List<String> getCSVContentList(BufferedReader br) {
-        return null;
+    public List<String> getCSVContentList(BufferedReader br) throws IOException {
+        List<String> titleCsv = CsvFileParser.parseFirstLine(br);
+        if(titleCsv == null || titleCsv.isEmpty()) {
+
+        }
+        // 开始预解析， 仅仅解析头部信息
+        parserTestCaseTitle(titleCsv);
+        if (! Arrays.stream (NESSCESSRY_FIELD).allMatch(item -> titleMap.containsKey(item))) {
+            return new ArrayList<>();
+        }
+        return CsvFileParser.parseCsvLines(br);
+    }
+
+    private void parserTestCaseTitle( List<String> title) {
+        List<String> titleInfo = Arrays.asList(TITLE_CH_SIM);
+
+        for ( Integer index = 0 ; index < title.size() ; index ++ ) {
+            Integer i = titleInfo.indexOf(title.get(index));
+            if( i > -1 ) {
+                titleMap.put(NESSCESSRY_FIELD[i], index);
+            }
+        }
     }
 
 
@@ -194,8 +215,58 @@ public class CSVToObject {
      * @Param [list, titleMap]
      * @return java.util.List<java.util.List<java.lang.String>>
      **/
-    public static List<List<String>> batchIsMatched(List<List<String>> list, Map<String, Integer> titleMap) {
-        return null;
+    public List<List<String>> batchIsMatched(List<List<String>> list, Map<String, Integer> posIndex) {
+        // todo 不在标题内的数据应该被删除掉
+        List<List<String>> stringList = new ArrayList<>(list);
+        Iterator<List<String>> iterator = stringList.iterator();
+        while (iterator.hasNext()) {
+            List<String> caseLine = iterator.next();
+            for (Map.Entry<String, Integer> entry : posIndex.entrySet()) {
+                String caseContent;
+                try {
+                    caseContent = caseLine.get(entry.getValue());
+                } catch (IndexOutOfBoundsException e) {
+                    iterator.remove();
+                    break;
+                }
+
+                String titleKey = entry.getKey();
+                Integer fieldLength = fieldMap.get(titleKey);
+                String keyValue = entry.getKey();
+                // 如果检查结果等于1，则删除这一行
+                if( checkCaseContent(caseContent, keyValue, fieldLength).equals(1)) {
+                    iterator.remove();
+                }
+            }
+        }
+
+        return stringList;
+    }
+
+    /**
+     * @Author luojiarui
+     * @Description //TODO 检查，没有进行正则匹配
+     * @Date 11:16 下午 2022/7/17
+     * @Param [caseContent, keyValue, fieldLength]
+     * @return java.lang.Integer
+     **/
+    private Integer checkCaseContent(String caseContent, String keyValue, Integer fieldLength) {
+        if ( StringUtils.hasText(caseContent)) {
+            // 如果字符超长，直接删除掉
+            if(caseContent.length() > fieldLength + 1) {
+                return 1;
+            }
+            // 如果不做限制的字段则直接返回，如果需要做正则判断，则在这里进行
+            if( keyValue.equals("unit")) {
+                return 2;
+            }
+            // 如果不满足正则，则删除掉这一条
+            String currentreg = "";
+            if ( !Pattern.matches(currentreg, caseContent)) {
+                return 1;
+            }
+        }
+        return 0;
     }
 
 

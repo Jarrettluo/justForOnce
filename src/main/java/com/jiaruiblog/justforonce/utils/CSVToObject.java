@@ -1,7 +1,5 @@
 package com.jiaruiblog.justforonce.utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 
 import java.io.*;
@@ -160,7 +158,7 @@ public class CSVToObject {
     }
 
     /**
-     * 导出csv为对象列表
+     * 根据文件路径解析csv文件
      * @param filePath
      * @param <T>
      * @return
@@ -172,15 +170,31 @@ public class CSVToObject {
      */
     public <T> List<T> csvFileExport(String filePath) throws FileNotFoundException,
             IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException {
-        List<T> targets = new ArrayList<>();
         // Step.1 参数检查
         if( !new File(filePath).exists()) {
             throw new FileNotFoundException();
         }
+        return csvFileExport(new FileInputStream(filePath));
+    }
+
+    /**
+     * 导出csv为对象列表
+     * @param fileStream
+     * @param <T>
+     * @return
+     * @throws FileNotFoundException
+     * @throws IllegalAccessException
+     * @throws InstantiationException
+     * @throws NoSuchMethodException
+     * @throws InvocationTargetException
+     */
+    public <T> List<T> csvFileExport(InputStream fileStream) throws FileNotFoundException,
+            IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException {
+        List<T> targets = new ArrayList<>();
 
         // Step.2 逐行读取csv文件出来
         List<String> caseStringList = null;
-        try (InputStreamReader isr = new InputStreamReader(new FileInputStream(filePath),
+        try (InputStreamReader isr = new InputStreamReader(fileStream,
             Charset.forName("gb2312"));
             BufferedReader br = new BufferedReader(isr)) {
             caseStringList = getCSVContentList(br);

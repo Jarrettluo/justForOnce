@@ -1,16 +1,15 @@
 package com.jiaruiblog.justforonce.utils;
 
-import org.graalvm.compiler.core.common.util.ReversedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
-import org.springframework.web.util.pattern.PathPattern;
 
 import java.io.*;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.Charset;
+import java.text.MessageFormat;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -23,11 +22,6 @@ import java.util.regex.Pattern;
  * @Version 1.0
  **/
 public class CSVToObject {
-
-
-    private static Map<String, Integer> titleMap = new HashMap<>(8);
-
-    private static Map<String, Integer> fieldMap = new HashMap<>(8);
 
     // 提示信息
     private static final String INFO_MESSAGE = "导入了 {0} 条";
@@ -62,6 +56,9 @@ public class CSVToObject {
     // 属性不可重复的属性列表
     private List<String> noRepeatFeild = new ArrayList<>();
 
+    // csv 数据的首行个数
+    private int rowNum;
+
     /**
      * @Author luojiarui
      * @Description 无餐构造函数，用户实例初始化
@@ -80,6 +77,7 @@ public class CSVToObject {
         this.targetClass = targetClass;
         // 初始化阶段必需对每个field的类型进行判断基本类型，通过classloader进行判断
         this.config();
+        logger.info("[csv file transfer to Object] bind successfully");
         return this;
     }
 
@@ -164,18 +162,12 @@ public class CSVToObject {
     }
 
 
-    public <T> List<T> CSVExport(String filePath) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException, FileNotFoundException {
-
+    public <T> List<T> CSVExport(String filePath) throws FileNotFoundException,
+            IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException {
         List<T> targets = new ArrayList<>();
-
-        // Object target = targetClass.getDeclaredConstructor().newInstance();
-        // targets.add(target);
-        // if(target == null) {
-        //     return (List<T>) targets;
-        // }
-
         // Step.1 参数检查
         if( !new File(filePath).exists()) {
+            logger.info("[csv transforming] file is not existed");
             throw new FileNotFoundException();
         }
 
@@ -188,41 +180,40 @@ public class CSVToObject {
         } catch (Exception e) {
             e.printStackTrace();
         }
+
         if(caseStringList == null || caseStringList.isEmpty()) {
             return targets;
         }
-
         // STEP.3 将读到的列表进行重整
         List<List<String>> midSigList = new ArrayList<>();
+
         // 传入的csv进行判断是否加首列数据
-        int titleLength = this.fieldRowNameMap.keySet().size();
+        int titleLength = this.rowNum;
+        if(titleLength < 1) {
+            throw new RuntimeException("error!");
+        }
         // 判断长度是否足够
         int rows = caseStringList.size() / titleLength;
-
         for(int i = 0; i < rows; i++) {
             List<String> midSigRows = caseStringList.subList(i * titleLength, (i+1) * titleLength);
             midSigList.add(midSigRows);
         }
 
         // STEP.4 是否进行正则判断
-
-        midSigList = batchIsMatched(midSigList, titleMap);
-
+        logger.info(MessageFormat.format("[csv file is transforming] case size is {0} before pattern match!", midSigList.size()));
+        midSigList = batchIsMatched(midSigList, this.fieldPosIndexMap);
+        logger.info(MessageFormat.format("[csv file is transforming] case size is {0} after pattern match!", midSigList.size()));
         if(midSigList.isEmpty()) {
             throw new RuntimeException("midSigList is empty");
         }
 
         // STEP.5 Object instance
-        // 这里判断是否进行分组？
-        List<Object> midSignalMap = transformTestCases(midSigList, titleMap);
-
+        logger.info("instance is on the board!");
+        targets = transformTestCases(midSigList, this.fieldPosIndexMap);
         // STEP.6 清空
         caseStringList.clear();
-
         // STEP.7 存库
-
-        return new ArrayList<>();
-
+        return targets;
     }
 
     /**
@@ -233,13 +224,16 @@ public class CSVToObject {
      */
     private List<String> getCSVContentList(BufferedReader br) throws IOException {
         List<String> titleCsv = CsvFileParser.parseFirstLine(br);
+        logger.info(MessageFormat.format("读取到的csv标题个数是：{0}", titleCsv.size()));
         if(titleCsv == null || titleCsv.isEmpty()) {
             return Collections.emptyList();
         }
+        this.rowNum = titleCsv.size();
         // 开始预解析， 仅仅解析头部信息
         parserTestCaseTitle(titleCsv);
+
         // 如果头部中都不包含必须的，则直接返回空的列表
-        if (!this.necessaryField.stream().allMatch(item -> this.fieldPosIndexMap.containsKey(item))) {
+        if (!this.necessaryField.stream().allMatch(item -> this.fieldNecessaryMap.containsKey(item))) {
             return new ArrayList<>();
         }
         return CsvFileParser.parseCsvLines(br);
@@ -252,7 +246,7 @@ public class CSVToObject {
     private void parserTestCaseTitle( List<String> title) {
         List<String> titleInfo = new ArrayList<>();
         List<String> fieldList = new ArrayList<>();
-        for(String key : this.fieldPosIndexMap.keySet()) {
+        for(String key : this.fieldRowNameMap.keySet()) {
             fieldList.add(key);
             titleInfo.add(this.fieldRowNameMap.get(key));
         }
@@ -273,7 +267,7 @@ public class CSVToObject {
      * @Param [list, titleMap]
      * @return java.util.List<java.util.List<java.lang.String>>
      **/
-    public List<List<String>> batchIsMatched(List<List<String>> list, Map<String, Integer> posIndex) {
+    private List<List<String>> batchIsMatched(List<List<String>> list, Map<String, Integer> posIndex) {
         // todo 不在标题内的数据应该被删除掉
         List<List<String>> stringList = new ArrayList<>(list);
         Iterator<List<String>> iterator = stringList.iterator();
@@ -289,10 +283,10 @@ public class CSVToObject {
                 }
 
                 String titleKey = entry.getKey();
-                Integer fieldLength = fieldMap.get(titleKey);
-                String keyValue = entry.getKey();
+                Integer fieldLength = this.fieldLengthMap.get(titleKey);
+                String regex = this.fieldRegexMap.get(titleKey);
                 // 如果检查结果等于1，则删除这一行
-                if( checkCaseContent(caseContent, keyValue, fieldLength).equals(1)) {
+                if( checkCaseContent(caseContent, titleKey, fieldLength, regex).equals(1)) {
                     iterator.remove();
                 }
             }
@@ -308,39 +302,47 @@ public class CSVToObject {
      * @Param [caseContent, keyValue, fieldLength]
      * @return java.lang.Integer
      **/
-    private Integer checkCaseContent(String caseContent, String keyValue, Integer fieldLength) {
+    private static Integer checkCaseContent(String caseContent, String keyValue, Integer fieldLength, String currentreg) {
         if ( StringUtils.hasText(caseContent)) {
             // 如果字符超长，直接删除掉
             if(caseContent.length() > fieldLength + 1) {
                 return 1;
             }
             // 如果不做限制的字段则直接返回，如果需要做正则判断，则在这里进行
-            if( keyValue.equals("unit")) {
-                return 2;
-            }
+            // if( keyValue.equals("unit")) {
+            //     return 2;
+            // }
             // 如果不满足正则，则删除掉这一条
-            String currentreg = "";
-            if ( !Pattern.matches(currentreg, caseContent)) {
+            // String currentreg = "";
+            try {
+                if ( !Pattern.matches(currentreg, caseContent)) {
+                    return 1;
+                }
+            } catch (Exception e) {
                 return 1;
             }
         }
         return 0;
     }
 
-
-    private <T> List<T> transformTestCases(List<List<String>> cases, Map<String, Integer> titleMap) {
+    /**
+     * 将文本信息返回给后端
+     * @param cases
+     * @param titleMap
+     * @param <T>
+     * @return
+     */
+    private <T> List<T> transformTestCases(List<List<String>> cases, Map<String, Integer> titleMap)
+            throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException {
         List<T> objects = new ArrayList<>();
         for (List<String> aCase : cases) {
-
             T object = (T) testCaseInstance(titleMap, aCase);
             // 判断每个中间信号的属性是否是完整的，否则就跳过
             if(!getFieldValueByName(this.necessaryField, object)) {
                 break;
             }
             objects.add(object);
-
         }
-
         return objects;
     }
 
@@ -350,40 +352,54 @@ public class CSVToObject {
      * @param caseLine -> 字符串列表
      * @return 返回转换后的对象
      */
-    private Object testCaseInstance(Map<String, Integer> titleMap, List<String> caseLine) {
-        Object object = new Object();
+    private <T> T testCaseInstance(Map<String, Integer> titleMap, List<String> caseLine) throws IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException {
+
+        T t = (T) this.targetClass.getDeclaredConstructor().newInstance();
 
         for (Map.Entry<String, Integer> entry : titleMap.entrySet()) {
 
             // 找到需要赋值的内容
             String setValue = caseLine.get(entry.getValue());
-
             // 如果是某某值，则自动设置为某某值
-            if(entry.getKey().equals("unit") && StringUtils.hasText(setValue)) {
-                setValue = "/";
-            }
-
+            // TODO 设置默认值
+            // if(entry.getKey().equals("unit") && StringUtils.hasText(setValue)) {
+            //     setValue = "/";
+            // }
+            // TODO 设置不同的类型
             try {
                 Method method = this.targetClass.getDeclaredMethod("set" +
                         convertInitialUpper(entry.getKey()), String.class);
-                method.invoke(object, setValue);
+                method.invoke(t, setValue);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
-
-        return object;
+        return t;
     }
 
-    private static boolean getFieldValueByName(List<String> fileNames, Object o) {
+    /**
+     *
+     * @param fileNames
+     * @param o
+     * @return
+     */
+    private <T> boolean getFieldValueByName(List<String> fileNames, T o) {
         boolean flag = false;
 
         for (String fieldName : fileNames) {
             String getter = "get" + convertInitialUpper(fieldName);
             try {
+                Method getMethod = this.targetClass.getDeclaredMethod(getter);
 
+                String value = (String) getMethod.invoke(o);
+                if( StringUtils.hasText(value)) {
+                    flag = true;
+                } else {
+                    return flag;
+                }
             } catch (Exception e) {
                 e.printStackTrace();
+                return false;
             }
         }
         return flag;
@@ -401,6 +417,4 @@ public class CSVToObject {
         chars[0] -= 32;
         return new String(chars);
     }
-
-
 }

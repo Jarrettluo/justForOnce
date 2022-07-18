@@ -5,7 +5,10 @@ package com.jiaruiblog.justforonce.config;
  * @Date 2022/5/26 18:38
  * @Version 1.0
  */
-import org.apache.log4j.Logger;
+// import org.apache.log4j.Logger;
+import com.jiaruiblog.justforonce.utils.CSVToObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CachingConfigurerSupport;
 import org.springframework.context.annotation.Configuration;
@@ -15,8 +18,9 @@ import redis.clients.jedis.JedisPoolConfig;
 @Configuration
 public class RedisConfig extends CachingConfigurerSupport {
 
-    private static System Logger;
-    protected static final Logger logger = Logger.getLogger(RedisConfig.class);
+    // private static System Logger;
+    // protected static final Logger logger = Logger.getLogger(RedisConfig.class);
+    private Logger logger = LoggerFactory.getLogger(CSVToObject.class);
 
     @Value("${spring.redis.host}")
     private String host;

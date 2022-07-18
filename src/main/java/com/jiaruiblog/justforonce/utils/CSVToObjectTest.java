@@ -15,19 +15,19 @@ public class CSVToObjectTest {
     public static void main(String[] args) {
 
         CSVToObject csvToObject = new CSVToObject().bind(
-            TestCase.class, Set.class
+                TestCase.class, Set.class
         );
 
         try {
-            List<TestCase> testCaseList = csvToObject.CSVExport("sfdfd");
-            System.out.println(testCaseList);
+            List<TestCase> testCaseList = csvToObject.CSVExport("test.csv");
+
+            if (testCaseList.size() > 0) {
+                testCaseList.forEach(item -> System.out.println(item));
+                System.out.println(testCaseList.size());
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-
-
-        System.out.println(csvToObject);
-
     }
 }

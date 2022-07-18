@@ -9,5 +9,5 @@ public final class BeanUtil {
 
     private BeanUtil() {}
 
-    private static final MapperFactory MAPPER_FACTORY = new DefaultMapperFac
+    // private static final MapperFactory MAPPER_FACTORY = new DefaultMapperFa
 }

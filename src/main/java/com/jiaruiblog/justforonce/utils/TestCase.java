@@ -15,7 +15,7 @@ public class TestCase {
 
     private Long id;
 
-    @Transfer(rowName = "信号名称", fieldLength = 32, fieldRegex = "*")
+    @Transfer(rowName = "信号名称", fieldLength = 32, fieldRegex = ".*")
     private String name;
 
     @Transfer(rowName = "信号类型")
@@ -30,7 +30,7 @@ public class TestCase {
     @Transfer(rowName = "二级属性")
     private String attribute2;
 
-    @Transfer(rowName = "映射级名称")
+    @Transfer(rowName = "映射集名称")
     private String mappingName;
 
 

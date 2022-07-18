@@ -17,6 +17,7 @@ public class CSVToObjectTest {
         CSVToObject csvToObject = new CSVToObject().bind(
             TestCase.class, Set.class
         );
+
         try {
             List<TestCase> testCaseList = csvToObject.CSVExport("sfdfd");
             System.out.println(testCaseList);

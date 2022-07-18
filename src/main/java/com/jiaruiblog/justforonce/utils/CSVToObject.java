@@ -1,6 +1,8 @@
 package com.jiaruiblog.justforonce.utils;
 
-import com.sun.xml.internal.messaging.saaj.util.FinalArrayList;
+import org.graalvm.compiler.core.common.util.ReversedList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.pattern.PathPattern;
 
@@ -22,36 +24,58 @@ import java.util.regex.Pattern;
  **/
 public class CSVToObject {
 
-    private static final String [] TITLE_CH_SIM = {"信号名称", "信号类型", "单位", "一级属性", "二级属性", "映射级名称"};
-
-    private static final String [] NESSCESSRY_FIELD = {"name", "signalType", "unit", "attribute1", "attribute2", "mappingName"};
-
-    private static final Integer [] FIELD_LENGTH = {64, 20, 30, 50, 60, 50};
-
-    private static final String [] FIELD_REGEX = {"*", "*", "*", "*", "*", "*"};
 
     private static Map<String, Integer> titleMap = new HashMap<>(8);
 
     private static Map<String, Integer> fieldMap = new HashMap<>(8);
 
+    // 提示信息
     private static final String INFO_MESSAGE = "导入了 {0} 条";
+
+    private Logger logger = LoggerFactory.getLogger(CSVToObject.class);
 
     private Class<? extends Collection> collectionType = Set.class;
 
+    // 属性和列名的对应关系
+    private Map<String, String> fieldRowNameMap = new HashMap<>(8);
+
+    // 属性及属性长度的关系
+    private Map<String, Integer> fieldLengthMap = new HashMap<>(8);
+
+    // 属性及属性是否必要的关系
+    private Map<String, Boolean> fieldNecessaryMap = new HashMap<>(8);
+
+    private List<String> necessaryField = new ArrayList<>();
+
+    // 属性及属性的正则对应的关系
+    private Map<String, String> fieldRegexMap = new HashMap<>(8);
+
+    // 属性及属性的位置关系
+    private Map<String, Integer> fieldPosIndexMap = new HashMap<>(8);
+
+    // 属性及属性类型的关系
+    private Map<String, Class<?>> fieldTypeMap = new HashMap<>(8);
+
+    // 目标类
     private Class<?> targetClass;
+
+    // 属性不可重复的属性列表
+    private List<String> noRepeatFeild = new ArrayList<>();
 
     /**
      * @Author luojiarui
-     * @Description // 无餐构造函数，用户实例初始化
+     * @Description 无餐构造函数，用户实例初始化
      * @Date 1:58 下午 2022/7/17
-     * @Param []
-     * @return
      **/
-    public CSVToObject() {
-        this.generateFieldLengthMap();
-    }
+    public CSVToObject() {}
 
-
+    /**
+     * 绑定目标类
+     * @author luojiarui
+     * @date 2022年7月18日
+     * @param targetClass -> Class<?>
+     * @return csvToObject
+     */
     public CSVToObject bind(Class<?> targetClass) {
         this.targetClass = targetClass;
         // 初始化阶段必需对每个field的类型进行判断基本类型，通过classloader进行判断
@@ -59,10 +83,16 @@ public class CSVToObject {
         return this;
     }
 
+    /**
+     * 增加了自定义返回类型
+     * @param targetClass
+     * @param collectionType
+     * @param <T>
+     * @return
+     */
     public <T> CSVToObject bind(Class<?> targetClass, Class<T> collectionType) {
-        System.out.println(collectionType.getName());
         if( !Collection.class.isAssignableFrom(collectionType)) {
-            throw new RuntimeException("collection type is error!");
+            throw new RuntimeException("Collection type is error!");
         }
         this.collectionType = (Class<? extends Collection>) collectionType;
         return bind(targetClass);
@@ -76,62 +106,78 @@ public class CSVToObject {
      * @return void
      **/
     private void config() {
-
-        // todo 这里应该用map进行快速检索。
-
-        List<String> rowNames = new ArrayList<>();
-        List<Boolean> isNecessarys = new ArrayList<>();
-        List<Integer> fieldLengths = new ArrayList<>();
-        List<String> fieldRegexs = new ArrayList<>();
-        List<Boolean> isRepeate = new ArrayList<>();
-
         Field [] fields = targetClass.getDeclaredFields();
-        System.out.println(fields);
         for(int x = 0 ; x < fields.length; x++) {
             Transfer transfer = fields[x].getDeclaredAnnotation(Transfer.class);
             if(transfer != null) {
-                if( !StringUtils.hasText(transfer.rowName())) {
-                    continue;
-                }
-                rowNames.add(transfer.rowName());
-                isNecessarys.add(transfer.isNecessary());
-                fieldLengths.add(transfer.fieldLength());
-                fieldRegexs.add(transfer.fieldRegex());
-                isRepeate.add(transfer.isRepeat());
+                this.parseField(fields[x], transfer);
             }
         }
-
     }
 
     /**
-     * @Author luojiarui
-     * @Description //生成属性的长度限制
-     * @Date 1:58 下午 2022/7/17
-     * @Param []
-     * @return void
-     **/
-    private void generateFieldLengthMap() {
-        for (int i = 0; i < NESSCESSRY_FIELD.length; i++) {
-            fieldMap.put(
-                    NESSCESSRY_FIELD[i], FIELD_LENGTH[i]
-            );
+     * 解析目标类中的属性信息
+     * @param field
+     * @param transfer
+     */
+    private void parseField(Field field, Transfer transfer) {
+
+        if(field == null || transfer == null) {
+            return;
+        }
+        String rowName = transfer.rowName();
+        if( !StringUtils.hasText(rowName)) {
+            return;
+        }
+        if( !isPrimitive(field.getGenericType().getClass())) {
+            return;
+        }
+        String fieldName = field.getName();
+        boolean isRepeat = transfer.isRepeat();
+
+        // if row name is repeated by other rows then return ;
+        if(this.fieldRowNameMap.containsValue(rowName)) {
+            return;
+        }
+
+        this.fieldRowNameMap.put(fieldName, rowName);
+        this.fieldNecessaryMap.put(fieldName, transfer.isNecessary());
+        this.fieldLengthMap.put(fieldName, transfer.fieldLength());
+        this.fieldRegexMap.put(fieldName, transfer.fieldRegex());
+
+        if ( transfer.isNecessary() ) {
+            this.necessaryField.add(fieldName);
+        }
+
+        if( !isRepeat) {
+            this.noRepeatFeild.add(fieldName);
         }
     }
 
-    public <T> List<T> CSVExport(String filePath) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+    /**
+     * 判断是否为Java的基本类型或者包装类
+     * @param aClass
+     * @return
+     */
+    private boolean isPrimitive(Class<?> aClass) {
+        return aClass != null && aClass.getClassLoader() == null;
+    }
 
-        List<Object> targets = new ArrayList<>();
 
-        Object target = targetClass.getDeclaredConstructor().newInstance();
+    public <T> List<T> CSVExport(String filePath) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException, FileNotFoundException {
 
-        targets.add(target);
-        if(target == null) {
-            return (List<T>) targets;
-        }
+        List<T> targets = new ArrayList<>();
 
+        // Object target = targetClass.getDeclaredConstructor().newInstance();
+        // targets.add(target);
+        // if(target == null) {
+        //     return (List<T>) targets;
+        // }
 
         // Step.1 参数检查
-        // TODO
+        if( !new File(filePath).exists()) {
+            throw new FileNotFoundException();
+        }
 
         // Step.2 逐行读取csv文件出来
         List<String> caseStringList = null;
@@ -142,20 +188,16 @@ public class CSVToObject {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-//        if(Collections.checkedCollection(caseStringList, String.class))
         if(caseStringList == null || caseStringList.isEmpty()) {
-            throw new RuntimeException("caseStringList is empty!");
+            return targets;
         }
 
         // STEP.3 将读到的列表进行重整
         List<List<String>> midSigList = new ArrayList<>();
-
         // 传入的csv进行判断是否加首列数据
-        Integer titleLength = titleMap.size();
-
+        int titleLength = this.fieldRowNameMap.keySet().size();
         // 判断长度是否足够
-        Integer rows = caseStringList.size() / titleLength;
+        int rows = caseStringList.size() / titleLength;
 
         for(int i = 0; i < rows; i++) {
             List<String> midSigRows = caseStringList.subList(i * titleLength, (i+1) * titleLength);
@@ -183,26 +225,42 @@ public class CSVToObject {
 
     }
 
-    public List<String> getCSVContentList(BufferedReader br) throws IOException {
+    /**
+     * 从文件流中获取字符串列表回来
+     * @param br 文件流
+     * @return -> List<String>
+     * @throws IOException 文件没找到的报错
+     */
+    private List<String> getCSVContentList(BufferedReader br) throws IOException {
         List<String> titleCsv = CsvFileParser.parseFirstLine(br);
         if(titleCsv == null || titleCsv.isEmpty()) {
-
+            return Collections.emptyList();
         }
         // 开始预解析， 仅仅解析头部信息
         parserTestCaseTitle(titleCsv);
-        if (! Arrays.stream (NESSCESSRY_FIELD).allMatch(item -> titleMap.containsKey(item))) {
+        // 如果头部中都不包含必须的，则直接返回空的列表
+        if (!this.necessaryField.stream().allMatch(item -> this.fieldPosIndexMap.containsKey(item))) {
             return new ArrayList<>();
         }
         return CsvFileParser.parseCsvLines(br);
     }
 
+    /**
+     * 转换csv的每列的头，找到头部的位置信息
+     * @param title csv文件的头部信息列表
+     */
     private void parserTestCaseTitle( List<String> title) {
-        List<String> titleInfo = Arrays.asList(TITLE_CH_SIM);
+        List<String> titleInfo = new ArrayList<>();
+        List<String> fieldList = new ArrayList<>();
+        for(String key : this.fieldPosIndexMap.keySet()) {
+            fieldList.add(key);
+            titleInfo.add(this.fieldRowNameMap.get(key));
+        }
 
-        for ( Integer index = 0 ; index < title.size() ; index ++ ) {
-            Integer i = titleInfo.indexOf(title.get(index));
+        for ( int index = 0 ; index < title.size() ; index ++ ) {
+            int i = titleInfo.indexOf(title.get(index));
             if( i > -1 ) {
-                titleMap.put(NESSCESSRY_FIELD[i], index);
+               this.fieldPosIndexMap.put(fieldList.get(i), index);
             }
         }
     }
@@ -270,13 +328,13 @@ public class CSVToObject {
     }
 
 
-    private static List<Object> transformTestCases(List<List<String>> cases, Map<String, Integer> titleMap) {
-        List<Object> objects = new ArrayList<>();
+    private <T> List<T> transformTestCases(List<List<String>> cases, Map<String, Integer> titleMap) {
+        List<T> objects = new ArrayList<>();
         for (List<String> aCase : cases) {
 
-            Object object = testCaseInstance(titleMap, aCase);
+            T object = (T) testCaseInstance(titleMap, aCase);
             // 判断每个中间信号的属性是否是完整的，否则就跳过
-            if(!getFieldValueByName(NESSCESSRY_FIELD, object)) {
+            if(!getFieldValueByName(this.necessaryField, object)) {
                 break;
             }
             objects.add(object);
@@ -286,8 +344,15 @@ public class CSVToObject {
         return objects;
     }
 
-    private static Object testCaseInstance(Map<String, Integer> titleMap, List<String> caseLine) {
+    /**
+     * 将某一行的数据转换成一个对象，
+     * @param titleMap -> 映射的row位置
+     * @param caseLine -> 字符串列表
+     * @return 返回转换后的对象
+     */
+    private Object testCaseInstance(Map<String, Integer> titleMap, List<String> caseLine) {
         Object object = new Object();
+
         for (Map.Entry<String, Integer> entry : titleMap.entrySet()) {
 
             // 找到需要赋值的内容
@@ -299,7 +364,7 @@ public class CSVToObject {
             }
 
             try {
-                Method method = object.getClass().getDeclaredMethod("set" +
+                Method method = this.targetClass.getDeclaredMethod("set" +
                         convertInitialUpper(entry.getKey()), String.class);
                 method.invoke(object, setValue);
             } catch (Exception e) {
@@ -307,10 +372,10 @@ public class CSVToObject {
             }
         }
 
-        return null;
+        return object;
     }
 
-    private static boolean getFieldValueByName(String[] fileNames, Object o) {
+    private static boolean getFieldValueByName(List<String> fileNames, Object o) {
         boolean flag = false;
 
         for (String fieldName : fileNames) {

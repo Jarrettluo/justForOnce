@@ -19,7 +19,7 @@ public class CSVToObjectTest {
         );
 
         try {
-            List<TestCase> testCaseList = csvToObject.CSVExport("test.csv");
+            List<TestCase> testCaseList = csvToObject.csvFileExport("test.csv");
 
             if (testCaseList.size() > 0) {
                 testCaseList.forEach(item -> System.out.println(item));

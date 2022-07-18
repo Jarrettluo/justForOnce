@@ -9,26 +9,19 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.Charset;
-import java.text.MessageFormat;
+
 import java.util.*;
 import java.util.regex.Pattern;
 
 /**
  * @ClassName CSVToObject
- * @Description TODO 返回内容自定义返回列表或者集合；自定义哪些是不能重复的。
+ * @Description 返回内容自定义返回列表或者集合；自定义哪些是不能重复的。
  * 也可以设置为是否转换为map？
  * @Author luojiarui
  * @Date 2022/7/17 1:49 下午
  * @Version 1.0
  **/
 public class CSVToObject {
-
-    // 提示信息
-    private static final String INFO_MESSAGE = "导入了 {0} 条";
-
-    private Logger logger = LoggerFactory.getLogger(CSVToObject.class);
-
-    private Class<? extends Collection> collectionType = Set.class;
 
     // 属性和列名的对应关系
     private Map<String, String> fieldRowNameMap = new HashMap<>(8);
@@ -48,23 +41,24 @@ public class CSVToObject {
     private Map<String, Integer> fieldPosIndexMap = new HashMap<>(8);
 
     // 属性及属性类型的关系
-    private Map<String, Class<?>> fieldTypeMap = new HashMap<>(8);
+    // private Map<String, Class<?>> fieldTypeMap = new HashMap<>(8);
+
+    // 属性默认值
+    private Map<String, String> fieldDefaultValueMap = new HashMap<>(8);
 
     // 目标类
     private Class<?> targetClass;
 
     // 属性不可重复的属性列表
-    private List<String> noRepeatFeild = new ArrayList<>();
+    private List<String> noRepeatField = new ArrayList<>();
+
+    // 忽略正则检查的属性列表
+    private List<String> ignoreField = new ArrayList<>();
 
     // csv 数据的首行个数
     private int rowNum;
 
-    /**
-     * @Author luojiarui
-     * @Description 无餐构造函数，用户实例初始化
-     * @Date 1:58 下午 2022/7/17
-     **/
-    public CSVToObject() {}
+    private Class<?> collectionType;
 
     /**
      * 绑定目标类
@@ -77,7 +71,6 @@ public class CSVToObject {
         this.targetClass = targetClass;
         // 初始化阶段必需对每个field的类型进行判断基本类型，通过classloader进行判断
         this.config();
-        logger.info("[csv file transfer to Object] bind successfully");
         return this;
     }
 
@@ -92,7 +85,7 @@ public class CSVToObject {
         if( !Collection.class.isAssignableFrom(collectionType)) {
             throw new RuntimeException("Collection type is error!");
         }
-        this.collectionType = (Class<? extends Collection>) collectionType;
+        this.collectionType = collectionType;
         return bind(targetClass);
     }
 
@@ -142,32 +135,46 @@ public class CSVToObject {
         this.fieldNecessaryMap.put(fieldName, transfer.isNecessary());
         this.fieldLengthMap.put(fieldName, transfer.fieldLength());
         this.fieldRegexMap.put(fieldName, transfer.fieldRegex());
+        this.fieldDefaultValueMap.put(fieldName, transfer.defaultValue());
 
         if ( transfer.isNecessary() ) {
             this.necessaryField.add(fieldName);
         }
 
         if( !isRepeat) {
-            this.noRepeatFeild.add(fieldName);
+            this.noRepeatField.add(fieldName);
+        }
+
+        if( transfer.ignore()) {
+            this.ignoreField.add(fieldName);
         }
     }
 
     /**
      * 判断是否为Java的基本类型或者包装类
-     * @param aClass
+     * @param aClass 判断是否为基本类型
      * @return
      */
     private boolean isPrimitive(Class<?> aClass) {
         return aClass != null && aClass.getClassLoader() == null;
     }
 
-
-    public <T> List<T> CSVExport(String filePath) throws FileNotFoundException,
+    /**
+     * 导出csv为对象列表
+     * @param filePath
+     * @param <T>
+     * @return
+     * @throws FileNotFoundException
+     * @throws IllegalAccessException
+     * @throws InstantiationException
+     * @throws NoSuchMethodException
+     * @throws InvocationTargetException
+     */
+    public <T> List<T> csvFileExport(String filePath) throws FileNotFoundException,
             IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException {
         List<T> targets = new ArrayList<>();
         // Step.1 参数检查
         if( !new File(filePath).exists()) {
-            logger.info("[csv transforming] file is not existed");
             throw new FileNotFoundException();
         }
 
@@ -200,15 +207,13 @@ public class CSVToObject {
         }
 
         // STEP.4 是否进行正则判断
-        logger.info(MessageFormat.format("[csv file is transforming] case size is {0} before pattern match!", midSigList.size()));
         midSigList = batchIsMatched(midSigList, this.fieldPosIndexMap);
-        logger.info(MessageFormat.format("[csv file is transforming] case size is {0} after pattern match!", midSigList.size()));
+
         if(midSigList.isEmpty()) {
             throw new RuntimeException("midSigList is empty");
         }
 
         // STEP.5 Object instance
-        logger.info("instance is on the board!");
         targets = transformTestCases(midSigList, this.fieldPosIndexMap);
         // STEP.6 清空
         caseStringList.clear();
@@ -224,10 +229,11 @@ public class CSVToObject {
      */
     private List<String> getCSVContentList(BufferedReader br) throws IOException {
         List<String> titleCsv = CsvFileParser.parseFirstLine(br);
-        logger.info(MessageFormat.format("读取到的csv标题个数是：{0}", titleCsv.size()));
+
         if(titleCsv == null || titleCsv.isEmpty()) {
             return Collections.emptyList();
         }
+
         this.rowNum = titleCsv.size();
         // 开始预解析， 仅仅解析头部信息
         parserTestCaseTitle(titleCsv);
@@ -246,9 +252,9 @@ public class CSVToObject {
     private void parserTestCaseTitle( List<String> title) {
         List<String> titleInfo = new ArrayList<>();
         List<String> fieldList = new ArrayList<>();
-        for(String key : this.fieldRowNameMap.keySet()) {
-            fieldList.add(key);
-            titleInfo.add(this.fieldRowNameMap.get(key));
+        for(Map.Entry<String, String> entry : this.fieldRowNameMap.entrySet()) {
+            fieldList.add(entry.getKey());
+            titleInfo.add(entry.getValue());
         }
 
         for ( int index = 0 ; index < title.size() ; index ++ ) {
@@ -268,7 +274,7 @@ public class CSVToObject {
      * @return java.util.List<java.util.List<java.lang.String>>
      **/
     private List<List<String>> batchIsMatched(List<List<String>> list, Map<String, Integer> posIndex) {
-        // todo 不在标题内的数据应该被删除掉
+        // 不在标题内的数据应该被删除掉
         List<List<String>> stringList = new ArrayList<>(list);
         Iterator<List<String>> iterator = stringList.iterator();
         while (iterator.hasNext()) {
@@ -297,25 +303,24 @@ public class CSVToObject {
 
     /**
      * @Author luojiarui
-     * @Description //TODO 检查，没有进行正则匹配
+     * @Description //检查，没有进行正则匹配
      * @Date 11:16 下午 2022/7/17
      * @Param [caseContent, keyValue, fieldLength]
      * @return java.lang.Integer
      **/
-    private static Integer checkCaseContent(String caseContent, String keyValue, Integer fieldLength, String currentreg) {
+    private Integer checkCaseContent(String caseContent, String keyValue, Integer fieldLength, String currentReg) {
         if ( StringUtils.hasText(caseContent)) {
             // 如果字符超长，直接删除掉
             if(caseContent.length() > fieldLength + 1) {
                 return 1;
             }
             // 如果不做限制的字段则直接返回，如果需要做正则判断，则在这里进行
-            // if( keyValue.equals("unit")) {
-            //     return 2;
-            // }
+            if( this.ignoreField.contains(keyValue)) {
+                return 2;
+            }
             // 如果不满足正则，则删除掉这一条
-            // String currentreg = "";
             try {
-                if ( !Pattern.matches(currentreg, caseContent)) {
+                if ( !Pattern.matches(currentReg, caseContent)) {
                     return 1;
                 }
             } catch (Exception e) {
@@ -361,11 +366,7 @@ public class CSVToObject {
             // 找到需要赋值的内容
             String setValue = caseLine.get(entry.getValue());
             // 如果是某某值，则自动设置为某某值
-            // TODO 设置默认值
-            // if(entry.getKey().equals("unit") && StringUtils.hasText(setValue)) {
-            //     setValue = "/";
-            // }
-            // TODO 设置不同的类型
+            // 设置不同的类型
             try {
                 Method method = this.targetClass.getDeclaredMethod("set" +
                         convertInitialUpper(entry.getKey()), String.class);

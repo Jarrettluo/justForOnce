@@ -24,5 +24,7 @@ public @interface Transfer {
     // 是否忽略正则检查
     boolean ignore() default false;
 
+    // 设置默认值
+    String defaultValue() default "";
 
 }

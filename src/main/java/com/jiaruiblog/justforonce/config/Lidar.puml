@@ -1,0 +1,11 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+SyncServer -> ReplayServer: 请求数据，准备播放 \n {canvasId: 1 }}
+ReplayServer --> SyncServer: { startTime: 1600001, endTime: 1700001, \n dataDetail: [{type: Lidar, model: rs32 }]}}}
+
+SyncServer -> ReplayServer: 根据播放进度请求数据 \n { currentTime: 17000000, canvasId: 1}}
+SyncServer <-- ReplayServer: 返回查询的视频数据}
+@enduml

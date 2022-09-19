@@ -11,3 +11,6 @@
 ## RedisUtils
 - 对象存入redis中 
 - 参考代码：https://blog.csdn.net/scorpio_meng/article/details/96100112
+
+## fileUtils
+- 文件切割和合并：支持自定义文件片段大小，切割合并路径

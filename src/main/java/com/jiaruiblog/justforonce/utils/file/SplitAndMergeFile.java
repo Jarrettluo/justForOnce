@@ -125,6 +125,7 @@ public class SplitAndMergeFile {
             //输出流，写文件,true表示追加写而不覆盖
             OutputStream outputStream=new BufferedOutputStream(new FileOutputStream(newMergeFile,true));
             //输入流，读文件
+            // Vector已经老旧了，应该使用ArrayList
             Vector<InputStream> vector=new Vector<InputStream>();
             for (int i = 0; i < splitSmallFileList.size(); i++) {
                 vector.add(new BufferedInputStream(new FileInputStream(splitSmallFileList.get(i))));

@@ -17,8 +17,7 @@ import java.util.concurrent.ArrayBlockingQueue;
  */
 public class Consumer implements Runnable{
 
-    //special object to kill consumers
-    public static final Object POISON_PILL = new Object();
+
 
     private int productCount = 3;
 
@@ -26,11 +25,9 @@ public class Consumer implements Runnable{
 
     private ArrayBlockingQueue<FileChunk> queue;
 
-    private volatile boolean endFlag = false;
 
-    public Consumer(ArrayBlockingQueue<FileChunk> queue, boolean endFlag) {
+    public Consumer(ArrayBlockingQueue<FileChunk> queue) {
         this.queue = queue;
-        this.endFlag = endFlag;
     }
 
     @Override
@@ -39,15 +36,22 @@ public class Consumer implements Runnable{
         while (true){
             try {
                 Thread.sleep(100);
-                if(queue.size() == 0) System.out.println("=============the queue is empty,the consumer thread is waiting................");
+                if(queue.size() == 0) {
+                    System.out.println("=============the queue is empty,the consumer thread is waiting................");
+                }
                 FileChunk item = queue.take();
+
+                //poison pill processing
+                if (item == FileSplitService.POISON_PILL) {
+                    //put back to kill others
+                    queue.put(item);
+                    System.out.println(" finished");
+                    break;
+                }
+
                 System.out.println("consumer:" + Thread.currentThread().getName() + " consume:" + item+";the size of the queue:" + queue.size());
             } catch (InterruptedException e) {
                 e.printStackTrace();
-            }
-
-            if ( endFlag && queue.isEmpty()) {
-                break;
             }
         }
 

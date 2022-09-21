@@ -1,5 +1,7 @@
 package com.jiaruiblog.justforonce.service.fileSplit;
 
+import lombok.SneakyThrows;
+
 import java.security.SecureRandom;
 import java.util.Random;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -15,11 +17,11 @@ public class Producer implements Runnable {
 
     private volatile boolean endFlag = false;
 
-    public Producer(ArrayBlockingQueue<FileChunk> queue, boolean endFlag) {
+    public Producer(ArrayBlockingQueue<FileChunk> queue) {
         this.queue = queue;
-        this.endFlag = endFlag;
     }
 
+    @SneakyThrows
     @Override
     public void run() {
 
@@ -43,6 +45,7 @@ public class Producer implements Runnable {
                 e.printStackTrace();
             }
             if ( count >= 50) {
+                queue.put(FileSplitService.POISON_PILL);
                 endFlag = true;
                 break;
             }

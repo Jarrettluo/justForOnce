@@ -13,10 +13,10 @@ import java.util.concurrent.ArrayBlockingQueue;
  */
 public class ProducerTest {
 
+
     @Test
     public void producerTest1() {
 
-        boolean endFlag = false;
         MetaFile metaFile = new MetaFile();
         metaFile.setName("testdataa");
 
@@ -24,13 +24,15 @@ public class ProducerTest {
         metaFile.setFileChunks(fileChunkList);
 
         ArrayBlockingQueue<FileChunk> queue = new ArrayBlockingQueue<FileChunk>(10);
-        Thread producer1 = new Thread(new Producer(queue, endFlag));
+        Thread producer1 = new Thread(new Producer(queue));
         producer1.start();
 
-        Thread consumer1 = new Thread(new Consumer(queue, endFlag));
-        Thread consumer2 = new Thread(new Consumer(queue, endFlag));
+        Thread consumer1 = new Thread(new Consumer(queue));
+        Thread consumer2 = new Thread(new Consumer(queue));
         consumer1.start();
         consumer2.start();
+
+
         try {
             producer1.join();
             consumer1.join();

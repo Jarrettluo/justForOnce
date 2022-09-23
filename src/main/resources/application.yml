@@ -18,3 +18,12 @@ spring:
         max-wait: 100
         max-idle: 500
         min-idle: 50
+
+# 设置HttpClient的日志级别， wire是请求求header相关信息（调试时开启，设置改为DEBUG）
+log4j:
+  logger:
+    org:
+      apache:
+        commons:
+          httpclient: ERROR
+          wire: ERROR

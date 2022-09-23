@@ -1,6 +1,6 @@
 package com.jiaruiblog.justforonce.service.fileSplit;
 
-import com.jiaruiblog.justforonce.utils.file.FileUtil;
+import ch.qos.logback.core.util.FileUtil;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -25,7 +25,7 @@ public class FileCoordinator {
     private int consumerCount = 5;
 
     /**
-     * 分片的大小，可以自由定制
+     * 分片的大小，可以自由定制, 这里是bit
      */
     public static final long CHUNK_SIZE = 1024*1024L;
 
@@ -33,6 +33,10 @@ public class FileCoordinator {
      * 分片是否进行压缩
      */
     private static final boolean IS_COMPRESS = false;
+
+    public static final String META_FOLDER = "originData";
+
+    public static final String CHUNK_FOLDER = "chunkData";
 
     /**
      * 原始文件的路径
@@ -60,9 +64,6 @@ public class FileCoordinator {
 
     public void start() throws IOException {
         MetaFile metaFile = getMetaData();
-
-        System.out.println(metaFile);
-
         if ( metaFile == null || metaFile == new MetaFile()) {
             throw new RuntimeException(" file is error !");
         }
@@ -92,6 +93,9 @@ public class FileCoordinator {
         } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
         }
+
+        // 结束以后删除文件夹
+        Files.delete(Paths.get(FILE_DIR));
 
     }
 

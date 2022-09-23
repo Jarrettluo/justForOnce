@@ -1,33 +1,30 @@
 package com.jiaruiblog.justforonce.service.fileSplit;
 
-import lombok.SneakyThrows;
-
-import java.security.SecureRandom;
-import java.util.Random;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Callable;
 
-
-// 参考代码：https://codeantenna.com/a/638m3PZeGY
-// 放入毒丸停止消费者
-// 标准生产者、消费者模型：https://zhuanlan.zhihu.com/p/73442055
 /**
  * @Author Jarrett Luo
- * @Date 2022/9/21 10:46
+ * @Date 2022/9/23 9:50
  * @Version 1.0
  */
-public class Consumer implements Runnable{
+public class NewConsumer implements Callable<List<FileChunk>> {
+
 
 
     private ArrayBlockingQueue<FileChunk> queue;
 
 
-    public Consumer(ArrayBlockingQueue<FileChunk> queue) {
+    public NewConsumer(ArrayBlockingQueue<FileChunk> queue) {
         this.queue = queue;
     }
 
-    @Override
-    public void run() {
 
+    @Override
+    public List<FileChunk> call() throws Exception {
+        List<FileChunk> fileChunks = new ArrayList<>(0);
         while (true){
             try {
                 Thread.sleep(100);
@@ -45,10 +42,11 @@ public class Consumer implements Runnable{
                 }
 
                 System.out.println("consumer:" + Thread.currentThread().getName() + " consume:" + item+";the size of the queue:" + queue.size());
+                fileChunks.add(item);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-
+        return fileChunks;
     }
 }

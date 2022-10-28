@@ -44,6 +44,7 @@ public class NewConsumer implements Callable<List<FileChunk>> {
                     System.out.println(" finished");
                     break;
                 }
+                String localPath = item.getPath();
 
                 FileInputStream fileInputStream = new FileInputStream(item.getPath());
                 String fileName = item.getName();
@@ -57,7 +58,7 @@ public class NewConsumer implements Callable<List<FileChunk>> {
                     fileChunks.add(item);
                 }
 
-                Files.delete(Paths.get(item.getPath()));
+                Files.delete(Paths.get(localPath));
 
 
             } catch (InterruptedException e) {

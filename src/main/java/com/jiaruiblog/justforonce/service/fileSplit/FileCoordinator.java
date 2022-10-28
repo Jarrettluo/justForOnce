@@ -25,9 +25,9 @@ public class FileCoordinator {
     private int consumerCount = 5;
 
     /**
-     * 分片的大小，可以自由定制, 这里是bit
+     * 分片的大小，可以自由定制, 这里是bit； 100M
      */
-    public static final long CHUNK_SIZE = 1024*1024L;
+    public static final long CHUNK_SIZE = 1024*1024L*10;
 
     /**
      * 分片是否进行压缩
@@ -94,7 +94,7 @@ public class FileCoordinator {
             e.printStackTrace();
         }
 
-        // 结束以后删除文件夹
+        // 结束以后删除文件夹, 遍历文件夹进行删除
         Files.delete(Paths.get(FILE_DIR));
 
     }

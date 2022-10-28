@@ -25,4 +25,18 @@ public class FileCoordinatorTest {
         System.out.println(endTime - startTime);
 
     }
+
+    @Test
+    public void coordinatorTest2() throws IOException {
+
+        long startTime = System.currentTimeMillis();
+
+        FileCoordinator fileCoordinator = new FileCoordinator("D:" + File.separator + "flutter_windows_v1.0.0-stable.zip");
+        fileCoordinator.start();
+
+        long endTime = System.currentTimeMillis();
+        System.out.println(endTime - startTime);
+
+    }
+
 }

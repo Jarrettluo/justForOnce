@@ -13,11 +13,15 @@ import static org.junit.Assert.*;
 public class MyClassLoaderTest {
 
     @Test
-    public void findClass() {
+    public void findClass() throws ClassNotFoundException, NoSuchMethodException {
 
         val myClassLoader = new MyClassLoader();
 
-        // Class<?> clazz = myClassLoader.findClass();
+
+        Class<?> clazz = myClassLoader.findClass("D:\\Apple.class");
+
+        final String name = clazz.getDeclaredConstructor().getName();
+        System.out.println(name);
 
         // clazz.newInstance();
 
